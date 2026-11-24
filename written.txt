@@ -1,3 +1,16 @@
 a.
+If each point is inserted as (n,n), it will devolve into a list.
+By this I mean: (1,1), (2,2), (3,3) and so on.
+I ran out of time sorry.
+
 b.
+Repeatedly inserting the same point causes an issue because there will eventually be more than the
+maximum number of primitives in one quadrant that can't be split into smaller quadrants - since they
+directly overlap. You could remedy this by having some sort of rule that only a certain number of
+points can be generated in one position in the first place - like in minecraft where if there are too
+many mobs in too small an area they will start to die due to entity cramming to reduce the number.
+
 c.
+If you made rotations in 90 degree increments, you would be able to rotate the entire quad tree and it will
+stay a quad tree. For non 90 degree increments though, if you rotated all of the points you would need to
+re generate the quad tree, as points would no longer be in the same place relative to the quadrants.

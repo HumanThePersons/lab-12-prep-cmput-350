@@ -178,8 +178,41 @@ public:
     // Appends primitive indicies whose bounds intersect with the given queryBounds to candidates.
     // Returns the number of intersection candidates found
     uint32_t queryIntersecting(const AABB<float>& queryBounds, std::vector<uint32_t>& candidates) {
-        // TODO -- do not use recursion, but you may emulate it yourself.
-        return 0;
+        const uint32_t before = candidates.size();
+
+        // stack keeping {nodeIdx, bounds of node cell}
+        std::vector<std::pair<uint32_t, AABB<float>>> stack;
+        stack.push_back({0, mBounds});
+
+        while (!stack.empty()) {
+            auto [nodeIdx, cell] = stack.back();
+            stack.pop_back();
+            const QuadTreeNode& node = mNodes[nodeIdx];
+
+            for (uint32_t primitive = node.primitivesIdx; primitive != INVALID_IDX; 
+                primitive = mNextPrimitiveIdx[primitive]) {
+                    auto p = mPrimitiveBounds[primitive];
+                    // Check overlapping
+                    if (p.minPoint.x <= queryBounds.maxPoint.x && queryBounds.minPoint.x <= p.maxPoint.x &&
+                        p.minPoint.y <= queryBounds.maxPoint.y && queryBounds.minPoint.y <= p.maxPoint.y) {
+                            candidates.push_back(primitive);
+                        }
+            }
+
+            if (!node.isLeaf()) {
+                // node is internal
+                for (int dir = 0; dir < 4; ++dir) {
+                    AABB<float> childCell = cell;
+                    aabbEnter(childCell, static_cast<OrdinalDirection>(dir));
+                    // Check overlapping
+                    if (childCell.minPoint.x <= queryBounds.maxPoint.x && queryBounds.minPoint.x <= childCell.maxPoint.x &&
+                        childCell.minPoint.y <= queryBounds.maxPoint.y && queryBounds.minPoint.y <= childCell.maxPoint.y) {
+                            stack.push_back({node.childIdx + dir, childCell});
+                        }
+                }
+            }
+        }
+        return static_cast<uint32_t>(candidates.size() - before);
     }
 
     // suitable for sparse updates
@@ -290,15 +323,47 @@ private:
     // Precondition: currentCell contains query.
     OrdinalDirection aabbQueryQuadrant(const AABB<float>& query,
                                        const AABB<float>& currentCell) const {
-        return {};
+        // Get x and y of center of cell
+        float cellX = (currentCell.minPoint.x + currentCell.maxPoint.x) * 0.5f;
+        float cellY = (currentCell.minPoint.y + currentCell.maxPoint.y) * 0.5f;
+        
+        bool toLeft = (query.maxPoint.x <= cellX);  // query is to the left of the center of cell
+        bool toRight = (query.minPoint.x >= cellX);
+        bool toTop = (query.maxPoint.y <= cellY);  // note y is smaller at the top (y axis points down)
+        bool toBottom = (query.minPoint.y >= cellY);
+
+        if ((!toLeft && !toRight) || (!toTop && !toBottom)) {
+            // straddles a center line - not fully to the left / right, or not fully above / below
+            return OrdinalDirection::INVALID_DIRECTION;
+        }
+
+        int direction = 0;
+        // NW = 0, NE = 1, SW = 2, SE = 3
+        if (toBottom) { direction += 2; }
+        if (toRight) { direction += 1; }
+
+        return static_cast<OrdinalDirection>(direction);
     };
-    // TODO
 
     // modifies a given AABB to obtain the resulting AABB if we were entering the cell on its
     // "direction" quadrant
     // Precondition: direction is not INVALID
-    void aabbEnter(AABB<float>& bounds, OrdinalDirection direction) const {};
-    // TODO
+    void aabbEnter(AABB<float>& bounds, OrdinalDirection direction) const {
+        // Direction: NW = 0, NE = 1, SW = 2, SE = 3
+        float cellX = (bounds.minPoint.x + bounds.maxPoint.x) * 0.5f;
+        float cellY = (bounds.minPoint.y + bounds.maxPoint.y) * 0.5f;
+
+        if (direction == NE || direction == SE) {
+            bounds.minPoint.x = cellX;  // leftmost point is center of given aabb
+        }
+        else { bounds.maxPoint.x = cellX; }
+
+        if (direction == NW || NE) {
+            // above center point - max is center point (because down is higher)
+            bounds.maxPoint.y = cellY;
+        }
+        else { bounds.minPoint.y = cellY; }
+    };
 
     AABB<float> mBounds;
     size_t mMaxPrimitivesPerLeaf;
